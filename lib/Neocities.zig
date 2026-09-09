@@ -156,9 +156,9 @@ pub fn upload(self: Neocities, files: []const UploadFile) !std.json.Parsed(Uploa
     }
 
     const cwd = std.fs.cwd();
-    var payload_builder = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+    var payload_builder = try std.ArrayList(u8).initCapacity(self.allocator, 4 * 1024 * 1024);
     try payload_builder.appendSlice(self.allocator, "--" ++ boundary);
-    var buffer: [1024]u8 = undefined;
+    var buffer: [4096]u8 = undefined;
     for (files) |file| {
         try payload_builder.appendSlice(self.allocator, "\r\nContent-Disposition: form-data; name=\"");
         try payload_builder.appendSlice(self.allocator, file.dest_name);
@@ -168,12 +168,17 @@ pub fn upload(self: Neocities, files: []const UploadFile) !std.json.Parsed(Uploa
         // try payload_builder.appendSlice("\"\r\nContent-Type: application/octet-stream\r\n\r\n");
         try payload_builder.appendSlice(self.allocator, "\"\r\n\r\n");
         const f = try cwd.openFile(file.source_path, .{});
+        const end = try f.getEndPos();
         defer f.close();
-        try f.reader(buffer[0..]).readAllArrayList(&payload_builder, 1024 * 1024 * 4);
-        try payload_builder.appendSlice("\r\n--" ++ boundary);
+        // try f.reader(buffer[0..]).readreadAllArrayList(&payload_builder, 1024 * 1024 * 4);
+        var reader = f.reader(buffer[0..]).interface;
+        try reader.readSliceAll(payload_builder.items[payload_builder.items.len..]);
+        payload_builder.shrinkAndFree(self.allocator, payload_builder.items.len + end);
+        try payload_builder.appendSlice(self.allocator, "\r\n--" ++ boundary);
+        // payload_builder.appendNTimes
     }
-    try payload_builder.appendSlice("--\r\n");
-    const payload = try payload_builder.toOwnedSlice();
+    try payload_builder.appendSlice(self.allocator, "--\r\n");
+    const payload = try payload_builder.toOwnedSlice(self.allocator);
     defer self.allocator.free(payload);
 
     std.log.debug("upload(): payload: {s}", .{payload});
@@ -255,6 +260,7 @@ fn post(self: Neocities, method: PostMethod, payload: []const u8) ![]const u8 {
 
     var header_buf: [4096]u8 = undefined;
     // TODO: http.fetch is bugged on 0.15.1
+    // TODO: reimplement post
     var req = try client.open(.POST, uri, .{
         .server_header_buffer = &header_buf,
         .headers = .{
