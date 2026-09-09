@@ -156,19 +156,20 @@ pub fn upload(self: Neocities, files: []const UploadFile) !std.json.Parsed(Uploa
     }
 
     const cwd = std.fs.cwd();
-    var payload_builder = std.ArrayList(u8).init(self.allocator);
-    try payload_builder.appendSlice("--" ++ boundary);
+    var payload_builder = try std.ArrayList(u8).initCapacity(self.allocator, 0);
+    try payload_builder.appendSlice(self.allocator, "--" ++ boundary);
+    var buffer: [1024]u8 = undefined;
     for (files) |file| {
-        try payload_builder.appendSlice("\r\nContent-Disposition: form-data; name=\"");
-        try payload_builder.appendSlice(file.dest_name);
-        try payload_builder.appendSlice("\"; filename=\"");
-        try payload_builder.appendSlice(file.dest_name);
+        try payload_builder.appendSlice(self.allocator, "\r\nContent-Disposition: form-data; name=\"");
+        try payload_builder.appendSlice(self.allocator, file.dest_name);
+        try payload_builder.appendSlice(self.allocator, "\"; filename=\"");
+        try payload_builder.appendSlice(self.allocator, file.dest_name);
         // TODO: add content type
         // try payload_builder.appendSlice("\"\r\nContent-Type: application/octet-stream\r\n\r\n");
-        try payload_builder.appendSlice("\"\r\n\r\n");
+        try payload_builder.appendSlice(self.allocator, "\"\r\n\r\n");
         const f = try cwd.openFile(file.source_path, .{});
         defer f.close();
-        try f.reader().readAllArrayList(&payload_builder, 1024 * 1024 * 4);
+        try f.reader(buffer[0..]).readAllArrayList(&payload_builder, 1024 * 1024 * 4);
         try payload_builder.appendSlice("\r\n--" ++ boundary);
     }
     try payload_builder.appendSlice("--\r\n");
@@ -337,11 +338,11 @@ test "user with login from env" {
     defer upload_json.deinit();
     try std.testing.expect(upload_json.value.result == .success);
 
-    const delete_json = try nc.delete(&[_][]const u8{ "README.md" });
+    const delete_json = try nc.delete(&[_][]const u8{"README.md"});
     defer delete_json.deinit();
     try std.testing.expect(delete_json.value.result == .success);
 
-    const delete_error_json = try nc.delete(&[_][]const u8{ "README.md" });
+    const delete_error_json = try nc.delete(&[_][]const u8{"README.md"});
     defer delete_error_json.deinit();
     try std.testing.expect(delete_error_json.value.result == .@"error");
 }

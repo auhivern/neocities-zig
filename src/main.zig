@@ -244,9 +244,16 @@ fn getApiKey(allocator: std.mem.Allocator) ![]const u8 {
         .username = username,
     };
 
-    var ws = std.json.writeStream(config_file.writer(), .{});
-    defer ws.deinit();
-    try ws.write(config);
+    var buffer: [64]u8 = undefined;
+    var writer = config_file.writer(buffer[0..]);
+    var stringify: std.json.Stringify = .{
+        .writer = &writer.interface,
+    };
+    // var ws = std.json.writeStream(config_file.writer(), .{});
+    try stringify.write(config);
+    try stringify.writer.flush();
+    // defer ws.deinit();
+    // try ws.write(config);
 
     std.log.info("Your API key has been saved to '{s}'.", .{config_path});
 
@@ -254,10 +261,10 @@ fn getApiKey(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn upload(args: *std.process.ArgIterator, nc: Neocities) !void {
-    var filenames = std.ArrayList([]const u8).init(nc.allocator);
-    defer filenames.deinit();
+    var filenames = try std.ArrayList([]const u8).initCapacity(nc.allocator, 0);
+    defer filenames.deinit(nc.allocator);
     while (args.next()) |arg| {
-        try filenames.append(arg);
+        try filenames.append(nc.allocator, arg);
     }
 
     var dest: []const u8 = undefined;
@@ -267,8 +274,8 @@ fn upload(args: *std.process.ArgIterator, nc: Neocities) !void {
     } else if (filenames.items.len == 1) {
         std.log.warn("No destination specified, defaulting to '/'.", .{});
         dest = "";
-    } else {
-        dest = filenames.pop();
+    } else if (filenames.pop()) |data| {
+        dest = data;
         if (dest[0] == '/') {
             dest = dest[1..];
         }
@@ -458,7 +465,7 @@ fn list(args: *std.process.ArgIterator, nc: Neocities) !void {
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--raw")) {
             is_raw = true;
-        } else if (std.mem.eql(u8, arg, "--dir")){
+        } else if (std.mem.eql(u8, arg, "--dir")) {
             only_dir = true;
         } else {
             path = arg;
