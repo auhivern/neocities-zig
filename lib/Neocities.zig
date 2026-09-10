@@ -273,6 +273,7 @@ fn post(self: Neocities, method: PostMethod, payload: []const u8, writer: *std.I
     const response = try client.fetch(.{
         .location = .{ .url = url },
         .payload = payload,
+        .headers = .{ .authorization = if (authorization) |auth| .{ .override = auth } else .default },
         .response_writer = writer,
     });
     // var req = try client.open(.POST, uri, .{

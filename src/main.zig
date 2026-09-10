@@ -153,6 +153,7 @@ fn getApiKey(allocator: std.mem.Allocator) ![]const u8 {
     const config_file = if (cwd.openFile(config_path, .{})) |config_file| blk: {
         const content = try config_file.readToEndAlloc(allocator, 4096);
         defer allocator.free(content);
+        std.debug.print("content: {s}\n", .{content});
         if (std.json.parseFromSlice(Config, allocator, content, .{})) |config| {
             defer config.deinit();
             return allocator.dupe(u8, config.value.api_key);
@@ -604,6 +605,8 @@ pub fn main() !void {
     const api_key = try getApiKey(allocator);
     defer allocator.free(api_key);
     const nc = Neocities.initApiKey(allocator, api_key);
+
+    std.debug.print("api_key: {s}\n", .{api_key});
 
     var buff: [1024]u8 = undefined;
     const command = args.next() orelse "help";
