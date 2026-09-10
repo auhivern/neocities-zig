@@ -4,7 +4,7 @@ const build_options = @import("build_options");
 const Neocities = @import("Neocities");
 
 pub const std_options: std.Options = .{
-    .log_level = if (builtin.mode == .Debug) .debug else .info,
+    .log_level = .debug, //if (builtin.mode == .Debug) .debug else .info,
     .logFn = coloredLog,
 };
 
@@ -411,7 +411,9 @@ fn info(sitename: ?[]const u8, nc: Neocities) !void {
 
     const value = info_request.value.info.?;
     var buf: [64]u8 = undefined;
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     try stdout.print(Color.bold ++ "sitename" ++ Color.reset ++ ":     {s}\n" ++
         Color.bold ++ "views" ++ Color.reset ++ ":        {s}\n" ++
@@ -424,6 +426,7 @@ fn info(sitename: ?[]const u8, nc: Neocities) !void {
         trimDate(value.created_at),
         trimDate(value.last_updated),
     });
+
     if (value.domain) |domain| {
         try stdout.print(Color.bold ++ "domain" ++ Color.reset ++ ":       {s}\n", .{domain});
     }
@@ -437,6 +440,8 @@ fn info(sitename: ?[]const u8, nc: Neocities) !void {
         }
         try stdout.writeAll("]\n");
     }
+
+    try stdout.flush();
 }
 
 fn toHumanReadableSize(buf: []u8, size: usize) ![]u8 {
@@ -489,7 +494,9 @@ fn list(args: *std.process.ArgIterator, nc: Neocities) !void {
         return;
     }
 
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     if (is_raw) {
         if (only_dir) {
@@ -523,26 +530,27 @@ fn list(args: *std.process.ArgIterator, nc: Neocities) !void {
 
     try stdout.writeAll(Color.bold);
     try stdout.writeAll("Path");
-    try stdout.writeByteNTimes(' ', path_padding - 2);
+    try stdout.splatByteAll(' ', path_padding - 2);
     try stdout.writeAll("Size");
-    try stdout.writeByteNTimes(' ', size_padding - 2);
+    try stdout.splatByteAll(' ', size_padding - 2);
     try stdout.writeAll("Date Modified\n");
     for (files) |file| {
         if (file.is_directory) {
             try stdout.print(Color.blue.toSeq() ++ "{s}", .{file.path});
-            try stdout.writeByteNTimes(' ', path_padding - file.path.len + 4 + size_padding);
+            try stdout.splatByteAll(' ', path_padding - file.path.len + 4 + size_padding);
             try stdout.print(Color.reset ++ "{s}\n", .{trimDate(file.updated_at)});
         } else if (!only_dir) {
             try stdout.print(Color.green.toSeq() ++ "{s}", .{file.path});
-            try stdout.writeByteNTimes(' ', path_padding - file.path.len + 2);
+            try stdout.splatByteAll(' ', path_padding - file.path.len + 2);
             const human_readable_size = try toHumanReadableSize(&buf, file.size.?);
             try stdout.print(Color.reset ++ "{s}", .{human_readable_size});
-            try stdout.writeByteNTimes(' ', size_padding - human_readable_size.len + 2);
+            try stdout.splatByteAll(' ', size_padding - human_readable_size.len + 2);
             try stdout.print("{s}\n", .{trimDate(file.updated_at)});
         }
         try stdout.writeAll(Color.bold);
     }
     try stdout.writeAll(Color.reset);
+    try stdout.flush();
 }
 
 fn logout(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !void {
@@ -563,7 +571,9 @@ fn logout(args: *std.process.ArgIterator, allocator: std.mem.Allocator) !void {
 }
 
 fn help(command: ?[]const u8) !void {
-    const stderr = std.io.getStdErr().writer();
+    var buff: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&buff);
+    const stderr = &stderr_writer.interface;
     if (command) |cmd| {
         if (std.mem.eql(u8, cmd, "upload")) {
             try stderr.print(usage_upload, .{progname});
@@ -579,6 +589,7 @@ fn help(command: ?[]const u8) !void {
     } else {
         try stderr.print(usage, .{progname});
     }
+    try stderr.flush();
 }
 
 pub fn main() !void {
@@ -594,6 +605,7 @@ pub fn main() !void {
     defer allocator.free(api_key);
     const nc = Neocities.initApiKey(allocator, api_key);
 
+    var buff: [1024]u8 = undefined;
     const command = args.next() orelse "help";
     if (std.mem.eql(u8, command, "upload")) {
         try upload(&args, nc);
@@ -604,13 +616,17 @@ pub fn main() !void {
     } else if (std.mem.eql(u8, command, "list")) {
         try list(&args, nc);
     } else if (std.mem.eql(u8, command, "key")) {
-        const stdout = std.fs.File.stdout().writer(&.{});
-        try stdout.interface.print("{s}\n", .{api_key});
+        var stdout_writer = std.fs.File.stdout().writer(&buff);
+        var stdout = &stdout_writer.interface;
+        try stdout.print("{s}\n", .{api_key});
+        try stdout.flush();
     } else if (std.mem.eql(u8, command, "logout")) {
         try logout(&args, allocator);
     } else if (std.mem.eql(u8, command, "version")) {
-        const stdout = std.fs.File.stdout().writer(&.{});
-        try stdout.interface.print("{s} v" ++ build_options.version_string ++ "\n", .{progname});
+        var stdout_writer = std.fs.File.stdout().writer(&buff);
+        var stdout = &stdout_writer.interface;
+        try stdout.print("{s} v" ++ build_options.version_string ++ "\n", .{progname});
+        try stdout.flush();
     } else {
         try help(args.next());
     }

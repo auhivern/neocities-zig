@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     const single_threaded = b.option(bool, "single-threaded", "Build a single threaded Executable");
     const pie = b.option(bool, "pie", "Build a Position Independent Executable");
     const strip = b.option(bool, "strip", "Strip executable");
-    const use_llvm = b.option(bool, "use-llvm", "Use Zig's llvm code backend");
+    // const use_llvm = b.option(bool, "use-llvm", "Use Zig's llvm code backend");
 
     const resolved_version = getVersion(b);
 
@@ -62,8 +62,8 @@ pub fn build(b: *std.Build) void {
         artifact.* = b.addExecutable(.{
             .name = program_name,
             .root_module = exe_module,
-            .use_llvm = use_llvm,
-            .use_lld = use_llvm,
+            .use_llvm = true, // use_llvm,
+            .use_lld = true, // use_llvm,
         });
     }
     release(b, &release_artifacts, resolved_version);
@@ -85,8 +85,8 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = program_name,
         .root_module = exe_module,
-        .use_llvm = use_llvm,
-        .use_lld = use_llvm,
+        .use_llvm = true, // use_llvm,
+        .use_lld = true, // use_llvm,
     });
     b.installArtifact(exe);
 
